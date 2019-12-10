@@ -45,7 +45,7 @@ class MinIOClient(Minio):
                                 length=_data_length,
                                 metadata=metadata)
             except Exception as e:
-                self.logger.error("Error uploading data to MinIO: {0}" % e)
+                self.logger.error("Error uploading data to MinIO: {0}".format(e))
             else:
                 return True
         return False
@@ -69,7 +69,7 @@ class MinIOClient(Minio):
             raw_object = self.get_object(bucket_name=bucket_name, object_name=object_name)
             raw_metadata = self.stat_object(bucket_name=bucket_name, object_name=object_name)
         except Exception as e:
-            self.logger.error("Error retrieving object from MinIO: {0}" % e)
+            self.logger.error("Error retrieving object from MinIO: {0}".format(e))
         else:
             object_metadata = raw_metadata.metadata
 
