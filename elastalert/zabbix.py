@@ -77,6 +77,9 @@ class ZabbixAlerter(Alerter):
         self.zbx_sender_port = self.rule.get('zbx_sender_port', 10051)
         self.zbx_host = self.rule.get('zbx_host')
         self.zbx_key = self.rule.get('zbx_key')
+        self.timestamp_field = self.rule.get('timestamp_field', '@timestamp')
+        self.timestamp_type = self.rule.get('timestamp_type', 'iso')
+        self.timestamp_strptime = self.rule.get('timestamp_strptime', '%Y-%m-%dT%H:%M:%S.%fZ')
 
         self.extra_data = self.rule.get('extra_data')
 
@@ -106,8 +109,14 @@ class ZabbixAlerter(Alerter):
         # the aggregation option set
         zm = []
         for match in matches:
-            ts_epoch = int(datetime.strptime(match['@timestamp'], "%Y-%m-%dT%H:%M:%S.%fZ").strftime('%s'))
-            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value='1', clock=ts_epoch))
+            if not ':' in match[self.timestamp_field] or not '-' in match[self.timestamp_field]:
+                ts_epoch = int(match[self.timestamp_field])
+            else:
+                try:
+                    ts_epoch = int(datetime.strptime(match[self.timestamp_field], self.timestamp_strptime).strftime('%s'))
+                except ValueError:
+                    ts_epoch = int(datetime.strptime(match[self.timestamp_field], '%Y-%m-%dT%H:%M:%SZ').strftime('%s'))
+            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value=1, clock=ts_epoch))
 
         if self.extra_data:
             extra_data = []
