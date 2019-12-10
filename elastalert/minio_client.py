@@ -1,7 +1,7 @@
 import io
 import logging
-import string
 import random
+import string
 
 from minio import Minio
 from minio.error import NoSuchKey, NoSuchBucket
@@ -13,25 +13,27 @@ def generate_secure_random(size, chars=string.ascii_uppercase + string.ascii_low
 
 class MinIOClient(Minio):
     def __init__(self, endpoint, access_key, secret_key, secure, **kwargs):
-        super().__init__(endpoint=endpoint,
-                         access_key=access_key,
-                         secret_key=secret_key,
-                         secure=secure,
-                         **kwargs)
+        super(MinIOClient, self).__init__(endpoint=endpoint,
+                                          access_key=access_key,
+                                          secret_key=secret_key,
+                                          secure=secure,
+                                          **kwargs)
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def upload_object(self, bucket_name, object_name, data, data_type):
+    def upload_object(self, bucket_name, object_name, data):
         _data = None
         _data_length = None
+        _data_type = None
 
-        if data_type == 'str':
+        if isinstance(data, str):
             data_bytes = data.encode('utf-8')
 
             _data = io.BytesIO(data_bytes)
             _data_length = len(data_bytes)
+            _data_type = 'str'
 
         metadata = {
-            'X-Amz-Meta-Data-Type': data_type,
+            'X-Amz-Meta-Data-Type': _data_type,
             'X-Amz-Meta-Source': 'elastalert'
         }
 
@@ -43,12 +45,12 @@ class MinIOClient(Minio):
                                 length=_data_length,
                                 metadata=metadata)
             except Exception as e:
-                self.logger.error(f"Error uploading data to MinIO: {e}")
+                self.logger.error("Error uploading data to MinIO: {0}" % e)
             else:
                 return True
         return False
 
-    def upload_random_object(self, bucket_name, data, data_type):
+    def upload_random_object(self, bucket_name, data):
         object_name = None
 
         valid = False
@@ -58,8 +60,7 @@ class MinIOClient(Minio):
 
         if self.upload_object(bucket_name=bucket_name,
                               object_name=object_name,
-                              data=data,
-                              data_type=data_type):
+                              data=data):
             return object_name
         return None
 
@@ -68,9 +69,9 @@ class MinIOClient(Minio):
             raw_object = self.get_object(bucket_name=bucket_name, object_name=object_name)
             raw_metadata = self.stat_object(bucket_name=bucket_name, object_name=object_name)
         except Exception as e:
-            self.logger.error(f"Error retrieving object from MinIO: {e}")
+            self.logger.error("Error retrieving object from MinIO: {0}" % e)
         else:
-            object_metadata = raw_metadata.get('metadata')
+            object_metadata = raw_metadata.metadata
 
             if object_metadata:
                 object_data = None
@@ -80,7 +81,7 @@ class MinIOClient(Minio):
                     object_data = raw_object.data.decode('utf-8')
 
                 return object_data, object_metadata
-        return None
+        return None, None
 
     def object_exists(self, bucket_name, object_name):
         try:

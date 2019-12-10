@@ -5,7 +5,7 @@ from datetime import datetime
 from pyzabbix import ZabbixSender, ZabbixMetric, ZabbixAPI
 
 from .alerts import Alerter
-from .minio import MinIOClient
+from .minio_client import MinIOClient
 
 
 def find_value(source, path):
@@ -132,8 +132,7 @@ class ZabbixAlerter(Alerter):
             }
 
             object_name = self.minio_client.upload_random_object(bucket_name=self.minio_bucket,
-                                                                 data=json.dumps(data, indent=2),
-                                                                 data_type='str')
+                                                                 data=json.dumps(data, indent=2))
 
             # All host triggers are obtained and then locally filtered to avoid
             # multiple ZabbixAPI requests
@@ -155,11 +154,11 @@ class ZabbixAlerter(Alerter):
             for trigger in filtered_triggers:
                 update_required = False
                 for tag in trigger['tags']:
-                    if tag['tag'] == 'minio_bucket' and tag['value'] != self.minio_bucket:
+                    if tag['tag'] == 'MINIO_BUCKET' and tag['value'] != self.minio_bucket:
                         tag['value'] = self.minio_bucket
                         update_required = True
 
-                    if tag['tag'] == 'minio_object' and tag['value'] != object_name:
+                    if tag['tag'] == 'MINIO_OBJECT' and tag['value'] != object_name:
                         tag['value'] = object_name
                         update_required = True
 
