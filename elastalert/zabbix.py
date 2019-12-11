@@ -141,21 +141,16 @@ class ZabbixAlerter(Alerter):
                 if found:
                     filtered_triggers.append(trigger)
 
-            # Only triggers with tags that requires updates are updated
             for trigger in filtered_triggers:
-                update_required = False
-                for tag in trigger['tags']:
-                    if tag['tag'] == 'MINIO_BUCKET' and tag['value'] != self.minio_bucket:
-                        tag['value'] = self.minio_bucket
-                        update_required = True
+                tags_index = {tag['tag']: tag['value'] for tag in trigger['tags']}
 
-                    if tag['tag'] == 'MINIO_OBJECT' and tag['value'] != object_name:
-                        tag['value'] = object_name
-                        update_required = True
+                tags_index['MINIO_BUCKET'] = self.minio_bucket
+                tags_index['MINIO_OBJECT'] = object_name
 
-                if update_required:
-                    self.logger.info(f"Updating tags for {self.zbx_host}'s trigger: {trigger['tags']}")
-                    self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
+                trigger['tags'] = [{'tag': tag, 'value': value} for tag, value in tags_index.items()]
+
+                self.logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}' tags: {trigger['tags']}")
+                self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
 
         ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
 
