@@ -1180,6 +1180,14 @@ class ElastAlerter(object):
 
             # Wait before querying again
             sleep_duration = total_seconds(next_run - datetime.datetime.utcnow())
+
+            # Write to ES info about the round of rules executed
+            body = {'@timestamp': ts_now(),
+                    'total_rules': [rule['name'] for rule in self.rules],
+                    'disabled_rules': [rule['name'] for rule in self.disabled_rules],
+                    'sleep_duration': sleep_duration}
+            self.writeback('elastalert_control', body)
+
             self.sleep_for(sleep_duration)
 
     def wait_until_responsive(self, timeout, clock=timeit.default_timer):
