@@ -137,14 +137,14 @@ class ZabbixAlerter(Alerter):
             # All host triggers are obtained and then locally filtered to avoid
             # multiple ZabbixAPI requests
             triggers = self.zbx_client.trigger.get(selectTags=['tag', 'value'],
-                                                   selectItems=['name'],
+                                                   selectItems=['key_'],
                                                    filter={'host': self.zbx_host})
 
             filtered_triggers = []
             for trigger in triggers:
                 found = False
                 for item in trigger['items']:
-                    if item['name'] == self.zbx_key:
+                    if item['key_'] == self.zbx_key:
                         found = True
                         break
                 if found:
