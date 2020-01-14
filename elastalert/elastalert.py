@@ -1184,9 +1184,9 @@ class ElastAlerter(object):
             # Write to ES info about the round of rules executed
             body = {'@timestamp': ts_now(),
                     'total_rules': [rule['name'] for rule in self.rules],
-                    'disabled_rules': [rule['name'] for rule in self.disabled_rules],
+                    'disabled_rules': self.get_disabled_rules(),
                     'sleep_duration': sleep_duration}
-            self.writeback('elastalert_control', body)
+            self.writeback('control_elastalert', body)
 
             self.sleep_for(sleep_duration)
 
