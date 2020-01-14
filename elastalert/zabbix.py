@@ -6,6 +6,7 @@ from pyzabbix import ZabbixSender, ZabbixMetric, ZabbixAPI
 
 from .alerts import Alerter
 from .minio_client import MinIOClient
+from .util import elastalert_logger, EAException
 
 
 def find_value(source, path):
@@ -63,7 +64,6 @@ class ZabbixClient(ZabbixAPI):
 
 
 class ZabbixAlerter(Alerter):
-
     # By setting required_options to a set of strings
     # You can ensure that the rule config file specifies all
     # of the options. Otherwise, ElastAlert will throw an exception
@@ -109,59 +109,65 @@ class ZabbixAlerter(Alerter):
         # the aggregation option set
         zm = []
         for match in matches:
-            if not ':' in match[self.timestamp_field] or not '-' in match[self.timestamp_field]:
+            if ':' not in match[self.timestamp_field] or '-' not in match[self.timestamp_field]:
                 ts_epoch = int(match[self.timestamp_field])
             else:
                 try:
-                    ts_epoch = int(datetime.strptime(match[self.timestamp_field], self.timestamp_strptime).strftime('%s'))
+                    ts_epoch = int(datetime.strptime(match[self.timestamp_field], self.timestamp_strptime)
+                                   .strftime('%s'))
                 except ValueError:
-                    ts_epoch = int(datetime.strptime(match[self.timestamp_field], '%Y-%m-%dT%H:%M:%SZ').strftime('%s'))
-            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value=1, clock=ts_epoch))
+                    ts_epoch = int(datetime.strptime(match[self.timestamp_field], '%Y-%m-%dT%H:%M:%SZ')
+                                   .strftime('%s'))
+            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value="1", clock=ts_epoch))
 
-        if self.extra_data:
-            extra_data = []
+        try:
+            if self.extra_data:
+                extra_data = []
 
-            for match in matches:
-                for related_event in match.get('related_events', []):
-                    extra_data.append(get_extra_fields(related_event, self.extra_data['fields']))
-                extra_data.append(get_extra_fields(match, self.extra_data['fields']))
+                for match in matches:
+                    for related_event in match.get('related_events', []):
+                        extra_data.append(get_extra_fields(related_event, self.extra_data['fields']))
+                    extra_data.append(get_extra_fields(match, self.extra_data['fields']))
 
-            data = {
-                'template': self.extra_data['template'],
-                'data': extra_data
-            }
+                data = {
+                    'template': self.extra_data['template'],
+                    'data': extra_data
+                }
 
-            object_name = self.minio_client.upload_random_object(bucket_name=self.minio_bucket,
-                                                                 data=json.dumps(data, indent=2))
+                object_name = self.minio_client.upload_random_object(bucket_name=self.minio_bucket,
+                                                                     data=json.dumps(data, indent=2))
 
-            # All host triggers are obtained and then locally filtered to avoid
-            # multiple ZabbixAPI requests
-            triggers = self.zbx_client.trigger.get(selectTags=['tag', 'value'],
-                                                   selectItems=['key_'],
-                                                   filter={'host': self.zbx_host})
+                # All host triggers are obtained and then locally filtered to avoid
+                # multiple ZabbixAPI requests
+                triggers = self.zbx_client.trigger.get(selectTags=['tag', 'value'],
+                                                       selectItems=['key_'],
+                                                       filter={'host': self.zbx_host})
 
-            filtered_triggers = []
-            for trigger in triggers:
-                found = False
-                for item in trigger['items']:
-                    if item['key_'] == self.zbx_key:
-                        found = True
-                        break
-                if found:
-                    filtered_triggers.append(trigger)
+                filtered_triggers = []
+                for trigger in triggers:
+                    found = False
+                    for item in trigger['items']:
+                        if item['key_'] == self.zbx_key:
+                            found = True
+                            break
+                    if found:
+                        filtered_triggers.append(trigger)
 
-            for trigger in filtered_triggers:
-                tags_index = {tag['tag']: tag['value'] for tag in trigger['tags']}
+                for trigger in filtered_triggers:
+                    tags_index = {tag['tag']: tag['value'] for tag in trigger['tags']}
 
-                tags_index['MINIO_BUCKET'] = self.minio_bucket
-                tags_index['MINIO_OBJECT'] = object_name
+                    tags_index['MINIO_BUCKET'] = self.minio_bucket
+                    tags_index['MINIO_OBJECT'] = object_name
 
-                trigger['tags'] = [{'tag': tag, 'value': value} for tag, value in tags_index.items()]
+                    trigger['tags'] = [{'tag': tag, 'value': value} for tag, value in tags_index.items()]
 
-                self.logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}' tags: {trigger['tags']}")
-                self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
+                    self.logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}' tags: {trigger['tags']}")
+                    self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
 
-        ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
+            ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
+        except Exception as e:
+            raise EAException("Error sending alert to Zabbix: %s" % e)
+        elastalert_logger.info("Alert sent to Zabbix")
 
     # get_info is called after an alert is sent to get data that is written back
     # to Elasticsearch in the field "alert_info"
