@@ -164,7 +164,10 @@ class ZabbixAlerter(Alerter):
                     self.logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}' tags: {trigger['tags']}")
                     self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
 
-            ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
+            response = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
+            if response.failed:
+                elastalert_logger.warning("Missing zabbix host '%s' or host's item '%s', alert will be discarded"
+                                          % (self.zbx_host, self.zbx_key))
         except Exception as e:
             raise EAException("Error sending alert to Zabbix: %s" % e)
         elastalert_logger.info("Alert sent to Zabbix")

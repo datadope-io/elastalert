@@ -88,5 +88,4 @@ class MinIOClient(Minio):
             self.stat_object(bucket_name=bucket_name, object_name=object_name)
         except (NoSuchKey, NoSuchBucket):
             return False
-        else:
-            return True
+        return True
