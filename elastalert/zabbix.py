@@ -1,5 +1,4 @@
 import json
-import logging
 from datetime import datetime
 
 from pyzabbix import ZabbixSender, ZabbixMetric, ZabbixAPI
@@ -37,7 +36,7 @@ class ZabbixClient(ZabbixAPI):
         self.sender_port = sender_port
         self.metrics_chunk_size = 200
         self.aggregated_metrics = []
-        self.logger = logging.getLogger(self.__class__.__name__)
+
         super(ZabbixClient, self).__init__(url=self.url,
                                            use_authenticate=self.use_authenticate,
                                            user=user,
@@ -48,19 +47,18 @@ class ZabbixClient(ZabbixAPI):
         if self.send_aggregated_metrics:
             self.aggregated_metrics.append(zm)
             if len(self.aggregated_metrics) > self.metrics_chunk_size:
-                self.logger.info("Sending: %s metrics" % (len(self.aggregated_metrics)))
+                elastalert_logger.info("Sending: %s metrics" % (len(self.aggregated_metrics)))
                 try:
                     ZabbixSender(zabbix_server=self.sender_host, zabbix_port=self.sender_port) \
                         .send(self.aggregated_metrics)
                     self.aggregated_metrics = []
                 except Exception as e:
-                    self.logger.exception(e)
-                    pass
+                    elastalert_logger.exception(e)
         else:
             try:
                 ZabbixSender(zabbix_server=self.sender_host, zabbix_port=self.sender_port).send([zm])
             except Exception as e:
-                self.logger.exception(e)
+                elastalert_logger.exception(e)
 
 
 class ZabbixAlerter(Alerter):
@@ -98,8 +96,6 @@ class ZabbixAlerter(Alerter):
             self.zbx_client = ZabbixClient(url=self.rule.get('zbx_endpoint'),
                                            user=self.rule.get('zbx_username'),
                                            password=self.rule.get('zbx_password'))
-
-        self.logger = logging.getLogger(self.__class__.__name__)
 
     # Alert is called
     def alert(self, matches):
@@ -161,7 +157,7 @@ class ZabbixAlerter(Alerter):
 
                     trigger['tags'] = [{'tag': tag, 'value': value} for tag, value in tags_index.items()]
 
-                    self.logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}' tags: {trigger['tags']}")
+                    elastalert_logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}' tags: {trigger['tags']}")
                     self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
 
             response = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
