@@ -114,7 +114,7 @@ class ZabbixAlerter(Alerter):
                 except ValueError:
                     ts_epoch = int(datetime.strptime(match[self.timestamp_field], '%Y-%m-%dT%H:%M:%SZ')
                                    .strftime('%s'))
-            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value="1", clock=ts_epoch))
+            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value='1', clock=ts_epoch))
 
         try:
             if self.extra_data:
