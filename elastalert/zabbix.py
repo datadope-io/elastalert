@@ -114,7 +114,7 @@ class ZabbixAlerter(Alerter):
                 except ValueError:
                     ts_epoch = int(datetime.strptime(match[self.timestamp_field], '%Y-%m-%dT%H:%M:%SZ')
                                    .strftime('%s'))
-            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value="1", clock=ts_epoch))
+            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value='1', clock=ts_epoch))
 
         try:
             if self.extra_data:
@@ -157,7 +157,8 @@ class ZabbixAlerter(Alerter):
 
                     trigger['tags'] = [{'tag': tag, 'value': value} for tag, value in tags_index.items()]
 
-                    elastalert_logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}' tags: {trigger['tags']}")
+                    elastalert_logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}', "
+                                            f"new tags: {trigger['tags']}")
                     self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
 
             response = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
