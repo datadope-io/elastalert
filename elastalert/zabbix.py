@@ -75,6 +75,7 @@ class ZabbixAlerter(Alerter):
         self.zbx_sender_port = self.rule.get('zbx_sender_port', 10051)
         self.zbx_host = self.rule.get('zbx_host')
         self.zbx_key = self.rule.get('zbx_key')
+        self.zbx_key_minio_data = self.rule.get('zbx_key_minio_data')
         self.timestamp_field = self.rule.get('timestamp_field', '@timestamp')
         self.timestamp_type = self.rule.get('timestamp_type', 'iso')
         self.timestamp_strptime = self.rule.get('timestamp_strptime', '%Y-%m-%dT%H:%M:%S.%fZ')
@@ -104,6 +105,7 @@ class ZabbixAlerter(Alerter):
         # It contains more than one match when the alert has
         # the aggregation option set
         zm = []
+        ts_epoch = None
         for match in matches:
             if ':' not in match[self.timestamp_field] or '-' not in match[self.timestamp_field]:
                 ts_epoch = int(match[self.timestamp_field])
@@ -133,33 +135,10 @@ class ZabbixAlerter(Alerter):
                 object_name = self.minio_client.upload_random_object(bucket_name=self.minio_bucket,
                                                                      data=json.dumps(data, indent=2))
 
-                # All host triggers are obtained and then locally filtered to avoid
-                # multiple ZabbixAPI requests
-                triggers = self.zbx_client.trigger.get(selectTags=['tag', 'value'],
-                                                       selectItems=['key_'],
-                                                       filter={'host': self.zbx_host})
-
-                filtered_triggers = []
-                for trigger in triggers:
-                    found = False
-                    for item in trigger['items']:
-                        if item['key_'] == self.zbx_key:
-                            found = True
-                            break
-                    if found:
-                        filtered_triggers.append(trigger)
-
-                for trigger in filtered_triggers:
-                    tags_index = {tag['tag']: tag['value'] for tag in trigger['tags']}
-
-                    tags_index['MINIO_BUCKET'] = self.minio_bucket
-                    tags_index['MINIO_OBJECT'] = object_name
-
-                    trigger['tags'] = [{'tag': tag, 'value': value} for tag, value in tags_index.items()]
-
-                    elastalert_logger.debug(f"Updating '{self.zbx_host}'-'{trigger['description']}', "
-                                            f"new tags: {trigger['tags']}")
-                    self.zbx_client.trigger.update(triggerid=trigger['triggerid'], tags=trigger['tags'])
+                zm.append(ZabbixMetric(host=self.zbx_host,
+                                       key=self.zbx_key_minio_data,
+                                       value=object_name,
+                                       clock=ts_epoch))
 
             response = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
             if response.failed:
