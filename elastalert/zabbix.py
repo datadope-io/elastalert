@@ -135,10 +135,13 @@ class ZabbixAlerter(Alerter):
                 object_name = self.minio_client.upload_random_object(bucket_name=self.minio_bucket,
                                                                      data=json.dumps(data, indent=2))
 
-                zm.append(ZabbixMetric(host=self.zbx_host,
-                                       key=self.zbx_key_minio_data,
-                                       value=object_name,
-                                       clock=ts_epoch))
+                if object_name:
+                    zm.append(ZabbixMetric(host=self.zbx_host,
+                                           key=self.zbx_key_minio_data,
+                                           value=object_name,
+                                           clock=ts_epoch))
+                else:
+                    elastalert_logger.warning("Data couldn't be loaded to MinIO, it won't be provided with the alert")
 
             response = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
             if response.failed:
