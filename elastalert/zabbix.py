@@ -147,9 +147,10 @@ class ZabbixAlerter(Alerter):
             if response.failed:
                 elastalert_logger.warning("Missing zabbix host '%s' or host's item '%s', alert will be discarded"
                                           % (self.zbx_host, self.zbx_key))
+            else:
+                elastalert_logger.info("Alert sent to Zabbix")
         except Exception as e:
             raise EAException("Error sending alert to Zabbix: %s" % e)
-        elastalert_logger.info("Alert sent to Zabbix")
 
     # get_info is called after an alert is sent to get data that is written back
     # to Elasticsearch in the field "alert_info"
