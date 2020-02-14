@@ -119,8 +119,6 @@ class ZabbixAlerter(Alerter):
             zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value='1', clock=ts_epoch))
 
         try:
-            zbx_sender = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port)
-
             if self.extra_data:
                 extra_data = []
 
@@ -138,21 +136,18 @@ class ZabbixAlerter(Alerter):
                                                                      data=json.dumps(data, indent=2))
 
                 if object_name:
-                    response = zbx_sender.send([ZabbixMetric(host=self.zbx_host,
-                                                             key=self.zbx_key_minio_data,
-                                                             value=object_name,
-                                                             clock=ts_epoch)])
-                    if response.failed:
-                        elastalert_logger.warning("Missing zabbix host '%s' or host's item '%s', "
-                                                  "MinIO data will be wrong" % (self.zbx_host, self.zbx_key_minio_data))
+                    zm.append(ZabbixMetric(host=self.zbx_host,
+                                           key=self.zbx_key_minio_data,
+                                           value=object_name,
+                                           clock=ts_epoch - 1))
                 else:
                     elastalert_logger.warning("Data couldn't be uploaded to MinIO, it won't be provided with the alert")
-                    zbx_sender.send([ZabbixMetric(host=self.zbx_host,
-                                                  key=self.zbx_key_minio_data,
-                                                  value='MinIO data upload failed',
-                                                  clock=ts_epoch)])
+                    zm.append(ZabbixMetric(host=self.zbx_host,
+                                           key=self.zbx_key_minio_data,
+                                           value='MinIO data upload failed',
+                                           clock=ts_epoch - 1))
 
-            response = zbx_sender.send(zm)
+            response = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
             if response.failed:
                 elastalert_logger.warning("Missing zabbix host '%s' or host's item '%s', alert will be discarded"
                                           % (self.zbx_host, self.zbx_key))
