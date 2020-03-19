@@ -16,10 +16,10 @@ def find_value(source, path):
         else:
             return find_value(source[current_path], path)
     else:
-        return 'Field not found'
+        return None
 
 
-def get_extra_fields(match, fields):
+def get_fields(match, fields):
     extra_fields = {}
     for field in fields:
         extra_fields[field] = find_value(match, field.split('.'))
@@ -100,6 +100,7 @@ class ZabbixAlerter(Alerter):
 
     # Alert is called
     def alert(self, matches):
+        zbx_host = self.zbx_host.strip()
 
         # Matches is a list of match dictionaries.
         # It contains more than one match when the alert has
@@ -107,6 +108,13 @@ class ZabbixAlerter(Alerter):
         zm = []
         ts_epoch = None
         for match in matches:
+            if zbx_host.startswith('{{') and zbx_host.endswith('}}'):
+                host_field = zbx_host[2:-2].strip()
+                zbx_host = find_value(match, host_field.split('.'))
+                if not zbx_host:
+                    elastalert_logger.error(f"Missing host field '%s' for dynamic host, alert will be discarded"
+                                            % host_field)
+                    return
             if ':' not in match[self.timestamp_field] or '-' not in match[self.timestamp_field]:
                 ts_epoch = int(match[self.timestamp_field])
             else:
@@ -116,7 +124,7 @@ class ZabbixAlerter(Alerter):
                 except ValueError:
                     ts_epoch = int(datetime.strptime(match[self.timestamp_field], '%Y-%m-%dT%H:%M:%SZ')
                                    .strftime('%s'))
-            zm.append(ZabbixMetric(host=self.zbx_host, key=self.zbx_key, value='1', clock=ts_epoch))
+            zm.append(ZabbixMetric(host=zbx_host, key=self.zbx_key, value='1', clock=ts_epoch))
 
         try:
             if self.extra_data:
@@ -124,8 +132,8 @@ class ZabbixAlerter(Alerter):
 
                 for match in matches:
                     for related_event in match.get('related_events', []):
-                        extra_data.append(get_extra_fields(related_event, self.extra_data['fields']))
-                    extra_data.append(get_extra_fields(match, self.extra_data['fields']))
+                        extra_data.append(get_fields(related_event, self.extra_data['fields']))
+                    extra_data.append(get_fields(match, self.extra_data['fields']))
 
                 data = {
                     'template': self.extra_data['template'],
@@ -136,13 +144,13 @@ class ZabbixAlerter(Alerter):
                                                                      data=json.dumps(data, indent=2))
 
                 if object_name:
-                    zm.append(ZabbixMetric(host=self.zbx_host,
+                    zm.append(ZabbixMetric(host=zbx_host,
                                            key=self.zbx_key_minio_data,
                                            value=object_name,
                                            clock=ts_epoch - 1))
                 else:
                     elastalert_logger.warning("Data couldn't be uploaded to MinIO, it won't be provided with the alert")
-                    zm.append(ZabbixMetric(host=self.zbx_host,
+                    zm.append(ZabbixMetric(host=zbx_host,
                                            key=self.zbx_key_minio_data,
                                            value='MinIO data upload failed',
                                            clock=ts_epoch - 1))
@@ -150,7 +158,7 @@ class ZabbixAlerter(Alerter):
             response = ZabbixSender(zabbix_server=self.zbx_sender_host, zabbix_port=self.zbx_sender_port).send(zm)
             if response.failed:
                 elastalert_logger.warning("Missing zabbix host '%s' or host's item '%s', alert will be discarded"
-                                          % (self.zbx_host, self.zbx_key))
+                                          % (zbx_host, self.zbx_key))
             else:
                 elastalert_logger.info("Alert sent to Zabbix")
         except Exception as e:
